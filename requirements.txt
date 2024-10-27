@@ -8,3 +8,4 @@ google
 matplotlib
 seaborn
 fastapi
+uvicorn
