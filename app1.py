@@ -1,60 +1,36 @@
-import sys
 import streamlit as st
-from phishingdetection import FeatureExtraction, gbc
 import numpy as np
-from urllib.parse import urlparse, parse_qs
-from fastapi import FastAPI
-from pydantic import BaseModel
-from streamlit.web import experimental_singleton
+import requests
+import threading
+import uvicorn
+from api import app  # Import the FastAPI app from api.py
 
-# FastAPI app initialization
-app = FastAPI()
+# Function to run FastAPI
+def run_fastapi():
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
-# Define request model for API endpoint
-class URLRequest(BaseModel):
-    url: str
-
-# FastAPI endpoint for phishing detection
-@app.post("/verify_url")
-async def verify_url(request: URLRequest):
-    obj = FeatureExtraction(request.url)
-    x = np.array(obj.getFeaturesList()).reshape(1, 30)
-    y_pred = gbc.predict(x)[0]
-    result = "safe" if y_pred == 1 else "phishing"
-    return {"status": result, "prediction": y_pred}
-
-# Function to mount FastAPI app in Streamlit
-@st.experimental_singleton
-def get_api():
-    from streamlit.web import StreamlitAPI
-    api = StreamlitAPI(app)
-    api.run(host="0.0.0.0", port=8000)
-    return api
-
-get_api()
+# Start FastAPI in a separate thread
+threading.Thread(target=run_fastapi, daemon=True).start()
 
 # Streamlit UI for manual URL input and detection
-st.title("Phishing Website Detection")
-
-# Get the URL parameter from the query string
-query_params = st.experimental_get_query_params()
-url = query_params.get("url", [""])[0]  # Default to an empty string if no URL is provided
+st.title("Phishing Website Detection - Test Interface")
 
 # User input for URL
-if not url:  # If URL is not passed, show text input
-    url = st.text_input("Enter the URL:", key="url_input")
+url = st.text_input("Enter the URL to test:")
 
 # Verify URL on button click
-if st.button("Check") or url:
-    if url:
-        st.write(f"Verifying URL: {url}")
-        obj = FeatureExtraction(url)
-        x = np.array(obj.getFeaturesList()).reshape(1, 30)
-        y_pred = gbc.predict(x)[0]
-        if y_pred == 1:
-            st.write("This is likely a safe website.")
+if st.button("Check") and url:
+    try:
+        # Call the FastAPI endpoint
+        response = requests.post("http://localhost:8000/verify_url", json={"url": url})
+        if response.status_code == 200:
+            result = response.json()
+            if result["status"] == "safe":
+                st.success("This site appears safe.")
+            else:
+                st.warning("Caution! This website may be suspicious.")
+            st.write("Prediction:", result["prediction"])
         else:
-            st.write("Caution! This website may be suspicious.")
-        st.write("Prediction:", y_pred)
-    else:
-        st.write("Please enter a URL.")
+            st.error("Error: Could not retrieve prediction.")
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error connecting to the FastAPI service: {e}")
