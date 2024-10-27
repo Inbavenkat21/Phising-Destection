@@ -6,3 +6,4 @@ requests
 whois
 google
 matplotlib
+seaborn
