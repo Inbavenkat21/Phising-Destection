@@ -7,3 +7,4 @@ whois
 google
 matplotlib
 seaborn
+fastapi
